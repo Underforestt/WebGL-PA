@@ -3,10 +3,20 @@
 // Vertex shader
 const vertexShaderSource = `
 attribute vec3 vertex;
+attribute vec3 normal;
 uniform mat4 ModelViewProjectionMatrix;
+uniform mat4 ModelNormalMatrix;
+
+varying vec3 v_normal;
+varying vec3 v_toView;
+uniform vec3 lightPos;
+varying vec3 v_toLight;
 
 void main() {
     gl_Position = ModelViewProjectionMatrix * vec4(vertex,1.0);
+    v_normal = mat3(ModelNormalMatrix)*normal;
+    v_toLight = mat3(ModelViewProjectionMatrix)*lightPos-mat3(ModelViewProjectionMatrix)*vertex;
+    v_toView = -mat3(ModelViewProjectionMatrix)*vertex;
 }`;
 
 
@@ -19,6 +29,26 @@ const fragmentShaderSource = `
 #endif
 
 uniform vec4 color;
+varying vec3 v_normal;
+uniform vec3 lightDir;
+varying vec3 v_toView;
+uniform vec3 lightPos;
+varying vec3 v_toLight;
+uniform float limit;
+uniform float smoothing;
 void main() {
+    vec3 normal = normalize(v_normal);
+   vec3 toView = normalize(v_toView);
+   vec3 toLight = normalize(v_toLight);
+   vec3 halfVector = normalize(toLight + toView);
+   float dotFromDirection = dot(toLight, 
+                               -lightDir);
+   float inLight = smoothstep(limit,limit+smoothing, dotFromDirection);
+  float light = inLight * dot(normal, toLight);
+  float specular = inLight * pow(dot(normal, halfVector), 100.0);
     gl_FragColor = color;
+    gl_FragColor.rgb *= light;
+
+   // Just add in the specular
+   //gl_FragColor.rgb += specular;
 }`;
