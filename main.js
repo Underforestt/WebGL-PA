@@ -234,7 +234,7 @@ function LoadTexture() {
 
     const image = new Image();
     image.crossOrigin = 'anonymus';
-    image.src = "https://raw.githubusercontent.com/GOB1F/vggi/main/dark%2Brough%2Btree%2Bbark.jpeg";
+    image.src = "https://static.turbosquid.com/Preview/2014/08/01__12_04_02/StoneWall1.jpg74B4E88B-474F-48E4-9873E560133A603E.jpgLarger.jpg";
     image.onload = () => {
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.texImage2D(
