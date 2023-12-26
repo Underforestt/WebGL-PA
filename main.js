@@ -4,6 +4,9 @@ let gl;                         // The webgl context.
 let surface;                    // A surface model
 let shProgram;                  // A shader program
 let spaceball;                  // A SimpleRotator object that lets the user rotate the view by mouse.
+let line;
+let lineDirection;
+let lightModel;
 
 function deg2rad(angle) {
     return angle * Math.PI / 180;
@@ -31,6 +34,14 @@ function Model(name) {
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
 
         this.count = vertices.length / 3;
+    }
+
+    this.DrawLine = function () {
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
+        gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(shProgram.iAttribVertex);
+
+        gl.drawArrays(gl.LINE_STRIP, 0, this.count);
     }
 
     this.Draw = function () {
@@ -96,7 +107,7 @@ function draw() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     /* Set the values of the projection transformation */
-    let projection = m4.orthographic(-5, 5, -5, 5, -5, 5);
+    let projection = m4.orthographic(-7, 7, -7, 7, -7, 7);
 
     /* Get the view matrix from the SimpleRotator object.*/
     let modelView = spaceball.getViewMatrix();
@@ -124,17 +135,31 @@ function draw() {
     let x = document.getElementById('x').value
     let y = document.getElementById('y').value
     let z = document.getElementById('z').value
-    gl.uniform3fv(shProgram.iLightDir, [x, y, z]);
-    let xpos = document.getElementById('xpos').value
-    let ypos = document.getElementById('ypos').value
-    let zpos = document.getElementById('zpos').value
-    gl.uniform3fv(shProgram.iLightPos, [xpos, ypos, zpos]);
+    gl.uniform3fv(shProgram.iLightDir, m4.normalize([x, y, z]));
+    // let xpos = document.getElementById('xpos').value
+    // let ypos = document.getElementById('ypos').value
+    // let zpos = document.getElementById('zpos').value
+
     let l = document.getElementById('l').value
     let s = document.getElementById('s').value
     gl.uniform1f(shProgram.iLimit, l);
     gl.uniform1f(shProgram.iSmoothing, s);
 
     surface.Draw();
+
+    gl.uniform1i(shProgram.iLine, true);
+    line.BufferData([0, 0, -5, 2 * Math.sin(Date.now() * 0.001), 0, -5])
+    gl.uniform3fv(shProgram.iLightPos, [2 * Math.sin(Date.now() * 0.001), 0, -5]);
+    gl.lineWidth(5);
+    lineDirection.BufferData([2 * Math.sin(Date.now() * 0.001), 0, -5, 2 * Math.sin(Date.now() * 0.001)+parseFloat(x), 0-parseFloat(y), -5+parseFloat(z)])
+    lineDirection.DrawLine()
+    // line.DrawLine()
+
+    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, m4.multiply(
+        modelViewProjection,
+        m4.translation(2 * Math.sin(Date.now() * 0.001), 0, -5)));
+    lightModel.Draw();
+    gl.uniform1i(shProgram.iLine, false);
 }
 function draw2() {
     draw()
@@ -158,10 +183,18 @@ function initGL() {
     shProgram.iSmoothing = gl.getUniformLocation(prog, "smoothing");
     shProgram.iLightDir = gl.getUniformLocation(prog, "lightDir");
     shProgram.iLightPos = gl.getUniformLocation(prog, "lightPos");
+    shProgram.iLine = gl.getUniformLocation(prog, "line");
 
     surface = new Model('Surface');
     surface.BufferData(CreateSurfaceData());
     surface.BufferData2(CreateSurfaceData());
+    line = new Model('Line')
+    lineDirection = new Model('LineDirection')
+    lineDirection.BufferData(2, 0, -5, 0, 0, 1)
+    line.BufferData([0, 0, -5, 2, 0, -5])
+    lightModel = new Model('LightModel')
+    lightModel.BufferData(CreateSphereList(0.1, 0.1))
+    lightModel.BufferData2(CreateSphereList(0.1, 0.1))
 
     gl.enable(gl.DEPTH_TEST);
 }
@@ -403,4 +436,36 @@ function getFacetAvarageNormal(u, v) {
     (n1[2] + n2[2] + n3[2] + n4[2] + n5[2] + n6[2]) / 6.0]
     n = m4.normalize(n);
     return n;
+}
+
+function CreateSphereList(step, r = 0.2) {
+    let vertexList = [];
+
+    let u = 0,
+        v = 0;
+    while (u < Math.PI * 2) {
+        while (v < Math.PI) {
+            let v1 = getSphereVertex(u, v, r);
+            let v2 = getSphereVertex(u + step, v, r);
+            let v3 = getSphereVertex(u, v + step, r);
+            let v4 = getSphereVertex(u + step, v + step, r);
+            vertexList.push(v1.x, v1.y, v1.z);
+            vertexList.push(v2.x, v2.y, v2.z);
+            vertexList.push(v3.x, v3.y, v3.z);
+            vertexList.push(v3.x, v3.y, v3.z);
+            vertexList.push(v2.x, v2.y, v2.z);
+            vertexList.push(v4.x, v4.y, v4.z);
+            v += step;
+        }
+        v = 0;
+        u += step;
+    }
+    return vertexList;
+}
+function getSphereVertex(long, lat, r) {
+    return {
+        x: r * Math.cos(long) * Math.sin(lat),
+        y: r * Math.sin(long) * Math.sin(lat),
+        z: r * Math.cos(lat)
+    }
 }

@@ -11,12 +11,15 @@ varying vec3 v_normal;
 varying vec3 v_toView;
 uniform vec3 lightPos;
 varying vec3 v_toLight;
+uniform bool line;
 
 void main() {
     gl_Position = ModelViewProjectionMatrix * vec4(vertex,1.0);
     v_normal = mat3(ModelNormalMatrix)*normal;
     v_toLight = mat3(ModelViewProjectionMatrix)*lightPos-mat3(ModelViewProjectionMatrix)*vertex;
     v_toView = -mat3(ModelViewProjectionMatrix)*vertex;
+    if(line){
+    }
 }`;
 
 
@@ -36,6 +39,7 @@ uniform vec3 lightPos;
 varying vec3 v_toLight;
 uniform float limit;
 uniform float smoothing;
+uniform bool line;
 void main() {
     vec3 normal = normalize(v_normal);
    vec3 toView = normalize(v_toView);
@@ -51,4 +55,7 @@ void main() {
 
    // Just add in the specular
    //gl_FragColor.rgb += specular;
+   if(line){
+      gl_FragColor = vec4(1.0,0.0,0.0,1.0);
+   }
 }`;
