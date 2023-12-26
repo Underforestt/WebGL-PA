@@ -4,9 +4,12 @@ let gl;                         // The webgl context.
 let surface;                    // A surface model
 let shProgram;                  // A shader program
 let spaceball;                  // A SimpleRotator object that lets the user rotate the view by mouse.
-let line;
-let lineDirection;
-let lightModel;
+let pointModel;
+let pointUV = {
+    u: 4500.0,
+    v: 60.0
+}
+let angle = 0;
 
 function deg2rad(angle) {
     return angle * Math.PI / 180;
@@ -17,7 +20,7 @@ function deg2rad(angle) {
 function Model(name) {
     this.name = name;
     this.iVertexBuffer = gl.createBuffer();
-    this.iVertexNormalBuffer = gl.createBuffer();
+    this.iVertexBuffer2 = gl.createBuffer();
     this.count = 0;
 
     this.BufferData = function (vertices) {
@@ -30,18 +33,9 @@ function Model(name) {
 
     this.BufferData2 = function (vertices) {
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexNormalBuffer);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer2);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
 
-        this.count = vertices.length / 3;
-    }
-
-    this.DrawLine = function () {
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
-        gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(shProgram.iAttribVertex);
-
-        gl.drawArrays(gl.LINE_STRIP, 0, this.count);
     }
 
     this.Draw = function () {
@@ -49,10 +43,9 @@ function Model(name) {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
         gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(shProgram.iAttribVertex);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexNormalBuffer);
-        gl.vertexAttribPointer(shProgram.iAttribVertexNormal, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(shProgram.iAttribVertexNormal);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer2);
+        gl.vertexAttribPointer(shProgram.iAttribVertex2, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(shProgram.iAttribVertex2);
 
         let lim_u = 14.5 * Math.PI * 100;
         let lim_v = 1.5 * Math.PI * 100;
@@ -66,13 +59,13 @@ function Model(name) {
         //     gl.drawArrays(gl.LINE_STRIP, u * v_count, v_count);
         // }
 
-        // draw v lines
-        let offset = u_count * v_count;
-        for (let v = 0; v <= v_count; v++) {
-            let start = (v * u_count) + offset;
-            let end = u_count;
-            gl.drawArrays(gl.TRIANGLES, 0, this.count);
-        }
+        // // draw v lines
+        // let offset = u_count * v_count;
+        // for (let v = 0; v <= v_count; v++) {
+        //     let start = (v * u_count) + offset;
+        //     let end = u_count;
+        gl.drawArrays(gl.TRIANGLES, 0, this.count);
+        // }
 
 
     }
@@ -103,67 +96,158 @@ function ShaderProgram(name, program) {
  * way to draw with WebGL.  Here, the geometry is so simple that it doesn't matter.)
  */
 function draw() {
-    gl.clearColor(1, 1, 1, 1);
+    gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     /* Set the values of the projection transformation */
-    let projection = m4.orthographic(-7, 7, -7, 7, -7, 7);
+    let projection = m4.orthographic(-5, 5, -5, 5, -5, 5);
 
     /* Get the view matrix from the SimpleRotator object.*/
     let modelView = spaceball.getViewMatrix();
 
-    let rotateToPointZero = m4.axisRotation([0, 0, 1], Math.PI);
-    let translateToPointZero = m4.translation(0, 0, 0);
-    let rotate = m4.xRotation(Math.PI)
+    let rotateToPointZero = m4.axisRotation([0.707, 0.707, 0], 0.7);
+    let translateToPointZero = m4.translation(0, 0, -3);
 
-    let matAccum0 = m4.multiply(rotate, modelView);
+    let matAccum0 = m4.multiply(rotateToPointZero, modelView);
     let matAccum1 = m4.multiply(translateToPointZero, matAccum0);
-    // let matAccum1 = m4.multiply(translateToPointZero, modelView);
 
     /* Multiply the projection matrix times the modelview matrix to give the
        combined transformation matrix, and send that to the shader program. */
     let modelViewProjection = m4.multiply(projection, matAccum1);
-    let modelNormal = m4.identity();
-    m4.inverse(modelView, modelNormal);
-    m4.transpose(modelNormal, modelNormal);
 
     gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
-    gl.uniformMatrix4fv(shProgram.iModelNormalMatrix, false, modelNormal);
 
     /* Draw the six faces of a cube, with different colors. */
     gl.uniform4fv(shProgram.iColor, [1, 1, 0, 1]);
-    let x = document.getElementById('x').value
-    let y = document.getElementById('y').value
-    let z = document.getElementById('z').value
-    gl.uniform3fv(shProgram.iLightDir, m4.normalize([x, y, z]));
-    // let xpos = document.getElementById('xpos').value
-    // let ypos = document.getElementById('ypos').value
-    // let zpos = document.getElementById('zpos').value
-
-    let l = document.getElementById('l').value
-    let s = document.getElementById('s').value
-    gl.uniform1f(shProgram.iLimit, l);
-    gl.uniform1f(shProgram.iSmoothing, s);
 
     surface.Draw();
-
-    gl.uniform1i(shProgram.iLine, true);
-    line.BufferData([0, 0, -5, 2 * Math.sin(Date.now() * 0.001), 0, -5])
-    gl.uniform3fv(shProgram.iLightPos, [2 * Math.sin(Date.now() * 0.001), 0, -5]);
-    gl.lineWidth(5);
-    lineDirection.BufferData([2 * Math.sin(Date.now() * 0.001), 0, -5, 2 * Math.sin(Date.now() * 0.001)+parseFloat(x), 0-parseFloat(y), -5+parseFloat(z)])
-    lineDirection.DrawLine()
-    // line.DrawLine()
-
+    let lim_u = 14.5 * Math.PI * 100;
+    let lim_v = 1.5 * Math.PI * 100;
+    gl.uniform2fv(shProgram.iPointUV, [map(pointUV.u, 0, lim_u, 0, 10), map(pointUV.v, 0, lim_v, 0, 1)])
+    let x = (pointUV.u / 100) * Math.cos(Math.cos(pointUV.u / 100)) * Math.cos(pointUV.v / 100);
+    let y = (pointUV.u / 100) * Math.cos(Math.cos(pointUV.u / 100)) * Math.sin(pointUV.v / 100);
+    let z = (pointUV.u / 100) * Math.sin(Math.cos(pointUV.u / 100));
     gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, m4.multiply(
         modelViewProjection,
-        m4.translation(2 * Math.sin(Date.now() * 0.001), 0, -5)));
-    lightModel.Draw();
-    gl.uniform1i(shProgram.iLine, false);
+        m4.translation(x / 20, y / 20, z / 20)));
+    gl.uniform1i(shProgram.iPoint, true)
+    gl.uniform1f(shProgram.iAngle, angle)
+    pointModel.Draw()
+    gl.uniform1i(shProgram.iPoint, false)
 }
-function draw2() {
-    draw()
-    window.requestAnimationFrame(draw2)
+
+function CreateSurfaceData() {
+    let vertexList = [];
+    for (let v = 0; v <= 1.5 * Math.PI * 100; v += 20) {
+        for (let u = 0; u <= 14.5 * Math.PI * 100; u += 20) {
+            let x = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.cos(v / 100);
+            let y = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.sin(v / 100);
+            let z = (u / 100) * Math.sin(Math.cos(u / 100));
+            vertexList.push(x / 20, y / 20, z / 20);
+            x = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.cos(v / 100);
+            y = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.sin(v / 100);
+            z = ((u + 20) / 100) * Math.sin(Math.cos((u + 20) / 100));
+            vertexList.push(x / 20, y / 20, z / 20);
+            x = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.cos((v + 20) / 100);
+            y = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.sin((v + 20) / 100);
+            z = (u / 100) * Math.sin(Math.cos(u / 100));
+            vertexList.push(x / 20, y / 20, z / 20);
+            x = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.cos((v + 20) / 100);
+            y = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.sin((v + 20) / 100);
+            z = (u / 100) * Math.sin(Math.cos(u / 100));
+            vertexList.push(x / 20, y / 20, z / 20);
+            x = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.cos(v / 100);
+            y = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.sin(v / 100);
+            z = ((u + 20) / 100) * Math.sin(Math.cos((u + 20) / 100));
+            vertexList.push(x / 20, y / 20, z / 20);
+            x = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.cos((v + 20) / 100);
+            y = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.sin((v + 20) / 100);
+            z = ((u + 20) / 100) * Math.sin(Math.cos((u + 20) / 100));
+            vertexList.push(x / 20, y / 20, z / 20);
+        }
+    }
+
+
+
+    return vertexList;
+}
+
+function CreateSurfaceData2() {
+    let lim_u = 14.5 * Math.PI * 100;
+    let lim_v = 1.5 * Math.PI * 100;
+    let vertexList = [];
+    for (let v = 0; v <= 1.5 * Math.PI * 100; v += 20) {
+        for (let u = 0; u <= 14.5 * Math.PI * 100; u += 20) {
+            vertexList.push(map(u, 0, lim_u, 0, 10), map(v, 0, lim_v, 0, 1));
+            vertexList.push(map(u + 20, 0, lim_u, 0, 10), map(v, 0, lim_v, 0, 1));
+            vertexList.push(map(u, 0, lim_u, 0, 10), map(v + 20, 0, lim_v, 0, 1));
+            vertexList.push(map(u, 0, lim_u, 0, 10), map(v + 20, 0, lim_v, 0, 1));
+            vertexList.push(map(u + 20, 0, lim_u, 0, 10), map(v, 0, lim_v, 0, 1));
+            vertexList.push(map(u + 20, 0, lim_u, 0, 10), map(v + 20, 0, lim_v, 0, 1));
+        }
+    }
+    return vertexList;
+}
+
+function map(value, a, b, c, d) {
+    value = (value - a) / (b - a);
+    return c + value * (d - c);
+}
+
+function CreateSphereList(step, r = 0.2) {
+    let vertexList = [];
+
+    let u = 0,
+        v = 0;
+    while (u < Math.PI * 2) {
+        while (v < Math.PI) {
+            let v1 = getSphereVertex(u, v, r);
+            let v2 = getSphereVertex(u + step, v, r);
+            let v3 = getSphereVertex(u, v + step, r);
+            let v4 = getSphereVertex(u + step, v + step, r);
+            vertexList.push(v1.x, v1.y, v1.z);
+            vertexList.push(v2.x, v2.y, v2.z);
+            vertexList.push(v3.x, v3.y, v3.z);
+            vertexList.push(v3.x, v3.y, v3.z);
+            vertexList.push(v2.x, v2.y, v2.z);
+            vertexList.push(v4.x, v4.y, v4.z);
+            v += step;
+        }
+        v = 0;
+        u += step;
+    }
+    return vertexList;
+}
+function getSphereVertex(long, lat, r) {
+    return {
+        x: r * Math.cos(long) * Math.sin(lat),
+        y: r * Math.sin(long) * Math.sin(lat),
+        z: r * Math.cos(lat)
+    }
+}
+
+function LoadTexture() {
+    let texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    const image = new Image();
+    image.crossOrigin = 'anonymus';
+    image.src = "https://raw.githubusercontent.com/GOB1F/vggi/main/dark%2Brough%2Btree%2Bbark.jpeg";
+    image.onload = () => {
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(
+            gl.TEXTURE_2D,
+            0,
+            gl.RGBA,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            image
+        );
+        console.log("imageLoaded")
+        draw()
+    }
 }
 
 
@@ -175,26 +259,24 @@ function initGL() {
     shProgram.Use();
 
     shProgram.iAttribVertex = gl.getAttribLocation(prog, "vertex");
-    shProgram.iAttribVertexNormal = gl.getAttribLocation(prog, "normal");
+    shProgram.iAttribVertex2 = gl.getAttribLocation(prog, "texture");
     shProgram.iModelViewProjectionMatrix = gl.getUniformLocation(prog, "ModelViewProjectionMatrix");
-    shProgram.iModelNormalMatrix = gl.getUniformLocation(prog, "ModelNormalMatrix");
+    shProgram.iTMU = gl.getUniformLocation(prog, 'tmu');
     shProgram.iColor = gl.getUniformLocation(prog, "color");
-    shProgram.iLimit = gl.getUniformLocation(prog, "limit");
-    shProgram.iSmoothing = gl.getUniformLocation(prog, "smoothing");
-    shProgram.iLightDir = gl.getUniformLocation(prog, "lightDir");
-    shProgram.iLightPos = gl.getUniformLocation(prog, "lightPos");
-    shProgram.iLine = gl.getUniformLocation(prog, "line");
+    shProgram.iPoint = gl.getUniformLocation(prog, "point");
+    shProgram.iPointPosition = gl.getUniformLocation(prog, "pointPosition");
+    shProgram.iPointUV = gl.getUniformLocation(prog, "pointUV");
+    shProgram.iAngle = gl.getUniformLocation(prog, "angle");
+
+    LoadTexture()
 
     surface = new Model('Surface');
+    pointModel = new Model('Surface');
     surface.BufferData(CreateSurfaceData());
-    surface.BufferData2(CreateSurfaceData());
-    line = new Model('Line')
-    lineDirection = new Model('LineDirection')
-    lineDirection.BufferData(2, 0, -5, 0, 0, 1)
-    line.BufferData([0, 0, -5, 2, 0, -5])
-    lightModel = new Model('LightModel')
-    lightModel.BufferData(CreateSphereList(0.1, 0.1))
-    lightModel.BufferData2(CreateSphereList(0.1, 0.1))
+    surface.BufferData2(CreateSurfaceData2());
+    pointModel.BufferData(CreateSphereList(0.1, 0.1))
+    pointModel.BufferData2(CreateSphereList(0.1, 0.1))
+
 
     gl.enable(gl.DEPTH_TEST);
 }
@@ -261,211 +343,29 @@ function init() {
     spaceball = new TrackballRotator(canvas, draw, 0);
 
     draw();
-    draw2();
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-function CreateSurfaceData() {
-    let vertexList = [];
-
-    // for(let u=0; u<=14.5*Math.PI*100; u+=20){
-    //     for(let v=0; v<=1.5*Math.PI*100; v+=20){  
-    //         let x = (u/100)*Math.cos(Math.cos(u/100))*Math.cos(v/100);
-    //         let y = (u/100)*Math.cos(Math.cos(u/100))*Math.sin(v/100);
-    //         let z = (u/100)*Math.sin(Math.cos(u/100));
-    //         vertexList.push(x/20, y/20, z/20);
-    //     }
-    // }
-
-    for (let v = 0; v <= 1.5 * Math.PI * 100; v += 20) {
-        for (let u = 0; u <= 14.5 * Math.PI * 100; u += 20) {
-            let x = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.cos(v / 100);
-            let y = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.sin(v / 100);
-            let z = (u / 100) * Math.sin(Math.cos(u / 100));
-            vertexList.push(x / 20, y / 20, z / 20);
-            x = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.cos(v / 100);
-            y = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.sin(v / 100);
-            z = ((u + 20) / 100) * Math.sin(Math.cos((u + 20) / 100));
-            vertexList.push(x / 20, y / 20, z / 20);
-            x = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.cos((v + 20) / 100);
-            y = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.sin((v + 20) / 100);
-            z = (u / 100) * Math.sin(Math.cos(u / 100));
-            vertexList.push(x / 20, y / 20, z / 20);
-            x = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.cos((v + 20) / 100);
-            y = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.sin((v + 20) / 100);
-            z = (u / 100) * Math.sin(Math.cos(u / 100));
-            vertexList.push(x / 20, y / 20, z / 20);
-            x = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.cos(v / 100);
-            y = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.sin(v / 100);
-            z = ((u + 20) / 100) * Math.sin(Math.cos((u + 20) / 100));
-            vertexList.push(x / 20, y / 20, z / 20);
-            x = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.cos((v + 20) / 100);
-            y = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.sin((v + 20) / 100);
-            z = ((u + 20) / 100) * Math.sin(Math.cos((u + 20) / 100));
-            vertexList.push(x / 20, y / 20, z / 20);
-        }
+window.onkeydown = (e) => {
+    let lim_u = 14.5 * Math.PI * 100;
+    let lim_v = 1.5 * Math.PI * 100;
+    if (e.keyCode == 87) {
+        pointUV.u = Math.min(pointUV.u + 20, lim_u);
     }
-
-
-
-    return vertexList;
-}
-
-function CreateSurfaceData2() {
-    let vertexList = [];
-    for (let v = 0; v <= 1.5 * Math.PI * 100; v += 20) {
-        for (let u = 0; u <= 14.5 * Math.PI * 100; u += 20) {
-            let x = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.cos(v / 100);
-            let y = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.sin(v / 100);
-            let z = (u / 100) * Math.sin(Math.cos(u / 100));
-            vertexList.push(...getFacetAvarageNormal(x / 20, y / 20, z / 20));
-            x = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.cos(v / 100);
-            y = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.sin(v / 100);
-            z = ((u + 20) / 100) * Math.sin(Math.cos((u + 20) / 100));
-            vertexList.push(...getFacetAvarageNormal(x / 20, y / 20, z / 20));
-            x = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.cos((v + 20) / 100);
-            y = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.sin((v + 20) / 100);
-            z = (u / 100) * Math.sin(Math.cos(u / 100));
-            vertexList.push(...getFacetAvarageNormal(x / 20, y / 20, z / 20));
-            x = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.cos((v + 20) / 100);
-            y = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.sin((v + 20) / 100);
-            z = (u / 100) * Math.sin(Math.cos(u / 100));
-            vertexList.push(...getFacetAvarageNormal(x / 20, y / 20, z / 20));
-            x = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.cos(v / 100);
-            y = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.sin(v / 100);
-            z = ((u + 20) / 100) * Math.sin(Math.cos((u + 20) / 100));
-            vertexList.push(...getFacetAvarageNormal(x / 20, y / 20, z / 20));
-            x = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.cos((v + 20) / 100);
-            y = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.sin((v + 20) / 100);
-            z = ((u + 20) / 100) * Math.sin(Math.cos((u + 20) / 100));
-            vertexList.push(...getFacetAvarageNormal(x / 20.0, y / 20.0, z / 20.0));
-        }
+    else if (e.keyCode == 65) {
+        pointUV.v = Math.max(pointUV.v - 20, 0);
     }
-    console.log(vertexList)
-    return vertexList;
-
-}
-
-function getFacetAvarageNormal(u, v) {
-    let x = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.cos(v / 100);
-    let y = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.sin(v / 100);
-    let z = (u / 100) * Math.sin(Math.cos(u / 100));
-    let v0 = [x, y, z]
-    x = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.cos(v / 100);
-    y = ((u + 20) / 100) * Math.cos(Math.cos((u + 20) / 100)) * Math.sin(v / 100);
-    z = ((u + 20) / 100) * Math.sin(Math.cos((u + 20) / 100));
-    let v1 = [x, y, z]
-    x = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.cos((v + 20) / 100);
-    y = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.sin((v + 20) / 100);
-    z = (u / 100) * Math.sin(Math.cos(u / 100));
-    let v2 = [x, y, z]
-    x = ((u - 20) / 100) * Math.cos(Math.cos((u - 20) / 100)) * Math.cos((v + 20) / 100);
-    y = ((u - 20) / 100) * Math.cos(Math.cos((u - 20) / 100)) * Math.sin((v + 20) / 100);
-    z = ((u - 20) / 100) * Math.sin(Math.cos((u - 20) / 100));
-    let v3 = [x, y, z]
-    x = ((u - 20) / 100) * Math.cos(Math.cos((u - 20) / 100)) * Math.cos(v / 100);
-    y = ((u - 20) / 100) * Math.cos(Math.cos((u - 20) / 100)) * Math.sin(v / 100);
-    z = ((u - 20) / 100) * Math.sin(Math.cos((u - 20) / 100));
-    let v4 = [x, y, z]
-    x = ((u - 20) / 100) * Math.cos(Math.cos((u - 20) / 100)) * Math.cos((v - 20) / 100);
-    y = ((u - 20) / 100) * Math.cos(Math.cos((u - 20) / 100)) * Math.sin((v - 20) / 100);
-    z = ((u - 20) / 100) * Math.sin(Math.cos((u - 20) / 100));
-    let v5 = [x, y, z]
-    x = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.cos((v - 20) / 100);
-    y = (u / 100) * Math.cos(Math.cos(u / 100)) * Math.sin((v - 20) / 100);
-    z = (u / 100) * Math.sin(Math.cos(u / 100));
-    let v6 = [x, y, z]
-
-    // defining each coincident facet by vector
-
-    m4.normalize(v0, v0)
-    m4.normalize(v1, v1)
-    m4.normalize(v2, v2)
-    m4.normalize(v3, v3)
-    m4.normalize(v4, v4)
-    m4.normalize(v5, v5)
-    m4.normalize(v6, v6)
-    let v01 = m4.normalize(m4.subtractVectors(v1, v0))
-    let v02 = m4.normalize(m4.subtractVectors(v2, v0))
-    let v03 = m4.normalize(m4.subtractVectors(v3, v0))
-    let v04 = m4.normalize(m4.subtractVectors(v4, v0))
-    let v05 = m4.normalize(m4.subtractVectors(v5, v0))
-    let v06 = m4.normalize(m4.subtractVectors(v6, v0))
-
-    // finding normal by taking cross product
-
-    let n1 = m4.normalize(m4.cross(v01, v02))
-    let n2 = m4.normalize(m4.cross(v02, v03))
-    let n3 = m4.normalize(m4.cross(v03, v04))
-    let n4 = m4.normalize(m4.cross(v04, v05))
-    let n5 = m4.normalize(m4.cross(v05, v06))
-    let n6 = m4.normalize(m4.cross(v06, v01))
-
-    //averaging the normal
-
-    let n = [(n1[0] + n2[0] + n3[0] + n4[0] + n5[0] + n6[0]) / 6.0,
-    (n1[1] + n2[1] + n3[1] + n4[1] + n5[1] + n6[1]) / 6.0,
-    (n1[2] + n2[2] + n3[2] + n4[2] + n5[2] + n6[2]) / 6.0]
-    n = m4.normalize(n);
-    return n;
-}
-
-function CreateSphereList(step, r = 0.2) {
-    let vertexList = [];
-
-    let u = 0,
-        v = 0;
-    while (u < Math.PI * 2) {
-        while (v < Math.PI) {
-            let v1 = getSphereVertex(u, v, r);
-            let v2 = getSphereVertex(u + step, v, r);
-            let v3 = getSphereVertex(u, v + step, r);
-            let v4 = getSphereVertex(u + step, v + step, r);
-            vertexList.push(v1.x, v1.y, v1.z);
-            vertexList.push(v2.x, v2.y, v2.z);
-            vertexList.push(v3.x, v3.y, v3.z);
-            vertexList.push(v3.x, v3.y, v3.z);
-            vertexList.push(v2.x, v2.y, v2.z);
-            vertexList.push(v4.x, v4.y, v4.z);
-            v += step;
-        }
-        v = 0;
-        u += step;
+    else if (e.keyCode == 83) {
+        pointUV.u = Math.max(pointUV.u - 20, 0);
     }
-    return vertexList;
-}
-function getSphereVertex(long, lat, r) {
-    return {
-        x: r * Math.cos(long) * Math.sin(lat),
-        y: r * Math.sin(long) * Math.sin(lat),
-        z: r * Math.cos(lat)
+    else if (e.keyCode == 68) {
+        pointUV.v = Math.min(pointUV.v + 20, lim_v);
     }
+    //left arrow
+    else if (e.keyCode == 37) {
+        angle -= parseFloat(document.getElementById('s').value)
+    }
+    //right arrow
+    else if (e.keyCode == 39) {
+        angle += parseFloat(document.getElementById('s').value)
+    }
+    draw()
 }

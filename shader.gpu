@@ -3,23 +3,71 @@
 // Vertex shader
 const vertexShaderSource = `
 attribute vec3 vertex;
-attribute vec3 normal;
+attribute vec2 texture;
 uniform mat4 ModelViewProjectionMatrix;
-uniform mat4 ModelNormalMatrix;
 
-varying vec3 v_normal;
-varying vec3 v_toView;
-uniform vec3 lightPos;
-varying vec3 v_toLight;
-uniform bool line;
+varying vec2 v_texture;
+uniform vec3 pointPosition;
+uniform vec2 pointUV;
+uniform float angle;
+
+uniform bool point;
+
+mat4 translation(vec3 t) {
+    mat4 dst;
+
+    dst[0][0] = 1.0;
+    dst[0][ 1] = 0.0;
+    dst[0][ 2] = 0.0;
+    dst[0][ 3] = 0.0;
+    dst[1][ 0] = 0.0;
+    dst[1][ 1] = 1.0;
+    dst[1][ 2] = 0.0;
+    dst[1][ 3] = 0.0;
+    dst[2][ 0] = 0.0;
+    dst[2][ 1] = 0.0;
+    dst[2][ 2] = 1.0;
+    dst[2][ 3] = 0.0;
+    dst[3][ 0] = t.x;
+    dst[3][ 1] = t.y;
+    dst[3][ 2] = t.z;
+    dst[3][ 3] = 1.0;
+
+    return dst;
+}
+
+mat4 rotation(float angleInRadians) {
+    mat4 dst;
+    float c = cos(angleInRadians);
+    float s = sin(angleInRadians);
+
+    dst[0][0] = c;
+    dst[0][ 1] = s;
+    dst[0][ 2] = 0.0;
+    dst[0][ 3] = 0.0;
+    dst[1][ 0] = -s;
+    dst[1][ 1] = c;
+    dst[1][ 2] = 0.0;
+    dst[1][ 3] = 0.0;
+    dst[2][ 0] = 0.0;
+    dst[2][ 1] = 0.0;
+    dst[2][ 2] = 1.0;
+    dst[2][ 3] = 0.0;
+    dst[3][ 0] = 0.0;
+    dst[3][ 1] = 0.0;
+    dst[3][ 2] = 0.0;
+    dst[3][ 3] = 1.0;
+
+    return dst;
+}
 
 void main() {
-    gl_Position = ModelViewProjectionMatrix * vec4(vertex,1.0);
-    v_normal = mat3(ModelNormalMatrix)*normal;
-    v_toLight = mat3(ModelViewProjectionMatrix)*lightPos-mat3(ModelViewProjectionMatrix)*vertex;
-    v_toView = -mat3(ModelViewProjectionMatrix)*vertex;
-    if(line){
-    }
+    vec4 v1 = translation(-vec3(pointUV,0.0))*vec4(texture,0.,1.);
+    vec4 v2 = rotation(angle)*v1;
+    vec4 v3 = translation(vec3(pointUV,0.0))*v2;
+    v_texture = vec2(v3.x,v3.y);
+    vec4 vert = ModelViewProjectionMatrix * vec4(vertex,1.0);
+    gl_Position = vert;
 }`;
 
 
@@ -32,30 +80,13 @@ const fragmentShaderSource = `
 #endif
 
 uniform vec4 color;
-varying vec3 v_normal;
-uniform vec3 lightDir;
-varying vec3 v_toView;
-uniform vec3 lightPos;
-varying vec3 v_toLight;
-uniform float limit;
-uniform float smoothing;
-uniform bool line;
+uniform sampler2D tmu;
+varying vec2 v_texture;
+uniform bool point;
 void main() {
-    vec3 normal = normalize(v_normal);
-   vec3 toView = normalize(v_toView);
-   vec3 toLight = normalize(v_toLight);
-   vec3 halfVector = normalize(toLight + toView);
-   float dotFromDirection = dot(toLight, 
-                               -lightDir);
-   float inLight = smoothstep(limit,limit+smoothing, dotFromDirection);
-  float light = inLight * dot(normal, toLight);
-  float specular = inLight * pow(dot(normal, halfVector), 100.0);
-    gl_FragColor = color;
-    gl_FragColor.rgb *= light;
-
-   // Just add in the specular
-   //gl_FragColor.rgb += specular;
-   if(line){
-      gl_FragColor = vec4(1.0,0.0,0.0,1.0);
-   }
+    vec4 texColor = texture2D(tmu,v_texture);
+    gl_FragColor = texColor;
+    if(point){
+        gl_FragColor = color;
+    }
 }`;
